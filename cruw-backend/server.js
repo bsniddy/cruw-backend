@@ -860,6 +860,108 @@ app.get('/api/groups/:groupId/members/completion/:date', async (req, res) => {
 });
 // --- End of API route to get group members with completion status ---
 
+// --- API route to get the most logged habit for a user ---
+app.get('/api/users/:userId/mostLoggedHabit', async (req, res) => {
+  // Get the database connection
+  const db = req.app.locals.db;
+
+  // Check if the database connection is available
+  if (!db) {
+    res.status(500).json({ message: 'Database not connected.' });
+    return;
+  }
+
+  // Get the user ID from the URL parameters
+  const userId = req.params.userId;
+
+  // Basic validation
+  if (!userId) {
+    res.status(400).json({ message: 'Missing user ID in parameters.' });
+    return;
+  }
+
+  try {
+    // Validate and convert user ID to ObjectId
+    if (!ObjectId.isValid(userId)) {
+        res.status(400).json({ message: 'Invalid user ID format.' });
+        return;
+    }
+    const userObjectId = new ObjectId(userId);
+
+    // Get the userHabitEntries and habits collections
+    const userHabitEntriesCollection = db.collection('userHabitEntries'); // *** Assuming collection name ***
+    const habitsCollection = db.collection('habits'); // *** Assuming collection name ***
+
+    // MongoDB Aggregation Pipeline
+    const pipeline = [
+      {
+        $match: {
+          userId: userObjectId // Filter entries for the specific user
+        }
+      },
+      {
+        $group: {
+          _id: '$habitId', // Group by habitId
+          count: { $sum: 1 } // Count occurrences of each habit
+        }
+      },
+      {
+        $sort: {
+          count: -1 // Sort by count descending (most frequent first)
+        }
+      },
+      {
+        $lookup: {
+          from: 'habits', // Join with the habits collection
+          localField: '_id', // The habitId from the grouped entries
+          foreignField: '_id', // The _id from the habits collection
+          as: 'habitDetails' // Output array field name
+        }
+      },
+      {
+        $unwind: '$habitDetails' // Deconstruct the habitDetails array
+      },
+      {
+        // Re-sort to handle ties by habit creation date (assuming a 'createdAt' field)
+        // Sort by count descending first, then createdAt ascending
+        $sort: {
+          count: -1,
+          'habitDetails.createdAt': 1 // Assuming 'createdAt' field exists on habit documents
+        }
+      },
+      {
+        $limit: 1 // Get only the top result
+      },
+      {
+        $project: {
+          _id: '$habitDetails._id',
+          title: '$habitDetails.title',
+          // Include other habit fields you need in the response
+          // e.g., description: '$habitDetails.description',
+          // assignedTo: '$habitDetails.assignedTo',
+          // schedule: '$habitDetails.schedule',
+          // createdBy: '$habitDetails.createdBy',
+          completionCount: '$count' // Include the count of entries for this habit
+        }
+      }
+    ];
+
+    const result = await userHabitEntriesCollection.aggregate(pipeline).toArray();
+
+    if (result.length > 0) {
+      res.status(200).json(result[0]);
+    } else {
+      // No habit entries found for this user
+      res.status(404).json({ message: 'No logged habits found for this user.' });
+    }
+
+  } catch (error) {
+    console.error('Error fetching most logged habit:', error);
+    res.status(500).json({ message: 'Failed to fetch most logged habit.', error: error.message });
+  }
+});
+// --- End of API route to get the most logged habit ---
+
 // --- Password Reset Flow (More complex - requires email service) ---
 // POST /api/auth/forgot-password - Initiates reset (sends email with token)
 
