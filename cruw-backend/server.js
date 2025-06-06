@@ -1180,6 +1180,88 @@ app.patch('/api/habits/:habitId', async (req, res) => {
 });
 // --- End of API route to update a single habit ---
 
+// --- API route to delete a single habit by ID ---
+app.delete('/api/habits/:habitId', async (req, res) => {
+  // Get the database connection
+  const db = req.app.locals.db;
+
+  // Check if the database connection is available
+  if (!db) {
+    res.status(500).json({ message: 'Database not connected.' });
+    return;
+  }
+
+  // Get the habit ID from the URL parameters
+  const habitId = req.params.habitId;
+
+  // Basic validation
+  if (!habitId) {
+    res.status(400).json({ message: 'Missing habit ID in parameters.' });
+    return;
+  }
+
+  try {
+    // Validate and convert habit ID to ObjectId
+    if (!ObjectId.isValid(habitId)) {
+        res.status(400).json({ message: 'Invalid habit ID format.' });
+        return;
+    }
+    const habitObjectId = new ObjectId(habitId);
+
+    // Get the habits collection
+    const habitsCollection = db.collection('habits'); // *** Assuming collection name ***
+    // Get the userHabitEntries and groupHabitEntries collections
+    const userHabitEntriesCollection = db.collection('userHabitEntries'); // *** Assuming collection name ***
+    const groupHabitEntriesCollection = db.collection('groupHabitEntries'); // *** Assuming collection name ***
+
+    // Optional: Add authorization check here
+    // Ensure the user making the request has permission to delete this habit (e.g., is the creator)
+    // const habit = await habitsCollection.findOne({ _id: habitObjectId });
+    // if (!habit || habit.createdBy.toString() !== req.user.id) { // Assuming user info is in req.user
+    //     res.status(403).json({ message: 'Not authorized to delete this habit.' });
+    //     return;
+    // }
+
+    // Start a MongoDB session and transaction for atomicity
+    const session = client.startSession(); // Assuming 'client' is your MongoClient instance
+    session.startTransaction();
+
+    try {
+      // Delete the habit itself
+      const deleteHabitResult = await habitsCollection.deleteOne({ _id: habitObjectId }, { session });
+
+      if (deleteHabitResult.deletedCount === 0) {
+        // Habit not found, abort transaction
+        await session.abortTransaction();
+        res.status(404).json({ message: 'Habit not found.' });
+      } else {
+        // Habit deleted successfully, now delete associated entries
+        // Delete user habit entries related to this habit
+        await userHabitEntriesCollection.deleteMany({ habitId: habitObjectId }, { session });
+        // Delete group habit entries related to this habit
+        await groupHabitEntriesCollection.deleteMany({ habitId: habitObjectId }, { session });
+
+        // Commit the transaction
+        await session.commitTransaction();
+
+        res.status(200).json({ message: 'Habit and associated entries deleted successfully.' });
+      }
+
+    } catch (transactionError) {
+      // Abort the transaction on any error
+      await session.abortTransaction();
+      throw transactionError; // Re-throw to be caught by the main catch block
+    } finally {
+      session.endSession();
+    }
+
+  } catch (error) {
+    console.error('Error deleting habit:', error);
+    res.status(500).json({ message: 'Failed to delete habit.', error: error.message });
+  }
+});
+// --- End of API route to delete a single habit ---
+
 // --- Password Reset Flow (More complex - requires email service) ---
 // POST /api/auth/forgot-password - Initiates reset (sends email with token)
 
