@@ -1115,6 +1115,71 @@ app.get('/api/groups/:groupId', async (req, res) => {
 });
 // --- End of API route to get a single group ---
 
+// --- API route to update a single habit by ID ---
+app.patch('/api/habits/:habitId', async (req, res) => {
+  // Get the database connection
+  const db = req.app.locals.db;
+
+  // Check if the database connection is available
+  if (!db) {
+    res.status(500).json({ message: 'Database not connected.' });
+    return;
+  }
+
+  // Get the habit ID from the URL parameters
+  const habitId = req.params.habitId;
+  // Get the update data from the request body
+  const updateData = req.body;
+
+  // Basic validation
+  if (!habitId || !updateData || Object.keys(updateData).length === 0) {
+    res.status(400).json({ message: 'Missing habit ID in parameters or empty update data in body.' });
+    return;
+  }
+
+  try {
+    // Validate and convert habit ID to ObjectId
+    if (!ObjectId.isValid(habitId)) {
+        res.status(400).json({ message: 'Invalid habit ID format.' });
+        return;
+    }
+    const habitObjectId = new ObjectId(habitId);
+
+    // Get the habits collection
+    const habitsCollection = db.collection('habits'); // *** Assuming collection name ***
+
+    // Optional: Add authorization check here
+    // Ensure the user making the request has permission to update this habit (e.g., is the creator)
+    // const habit = await habitsCollection.findOne({ _id: habitObjectId });
+    // if (!habit || habit.createdBy.toString() !== req.user.id) { // Assuming user info is in req.user
+    //     res.status(403).json({ message: 'Not authorized to update this habit.' });
+    //     return;
+    // }
+
+    // Perform the update operation
+    // Use $set to update only the fields provided in updateData
+    const result = await habitsCollection.updateOne(
+        { _id: habitObjectId },
+        { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      res.status(404).json({ message: 'Habit not found.' });
+    } else if (result.modifiedCount === 0) {
+      res.status(200).json({ message: 'Habit found, but no changes were made (data was the same).' });
+    } else {
+      // Optionally fetch and return the updated document
+      const updatedHabit = await habitsCollection.findOne({ _id: habitObjectId });
+      res.status(200).json({ message: 'Habit updated successfully.', updatedHabit });
+    }
+
+  } catch (error) {
+    console.error('Error updating habit:', error);
+    res.status(500).json({ message: 'Failed to update habit.', error: error.message });
+  }
+});
+// --- End of API route to update a single habit ---
+
 // --- Password Reset Flow (More complex - requires email service) ---
 // POST /api/auth/forgot-password - Initiates reset (sends email with token)
 
