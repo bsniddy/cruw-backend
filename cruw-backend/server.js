@@ -962,6 +962,58 @@ app.get('/api/users/:userId/mostLoggedHabit', async (req, res) => {
 });
 // --- End of API route to get the most logged habit ---
 
+// --- API route to get the account creation date for a user ---
+app.get('/api/users/:userId/createdAt', async (req, res) => {
+  // Get the database connection
+  const db = req.app.locals.db;
+
+  // Check if the database connection is available
+  if (!db) {
+    res.status(500).json({ message: 'Database not connected.' });
+    return;
+  }
+
+  // Get the user ID from the URL parameters
+  const userId = req.params.userId;
+
+  // Basic validation
+  if (!userId) {
+    res.status(400).json({ message: 'Missing user ID in parameters.' });
+    return;
+  }
+
+  try {
+    // Validate and convert user ID to ObjectId
+    if (!ObjectId.isValid(userId)) {
+        res.status(400).json({ message: 'Invalid user ID format.' });
+        return;
+    }
+    const userObjectId = new ObjectId(userId);
+
+    // Get the users collection
+    const usersCollection = db.collection('users'); // *** Assuming collection name ***
+
+    // Find the user and project only the createdAt field
+    const user = await usersCollection.findOne(
+        { _id: userObjectId },
+        { projection: { createdAt: 1 } } // Project only the createdAt field
+    );
+
+    if (user) {
+      // Return the createdAt date
+      res.status(200).json({ createdAt: user.createdAt });
+    } else {
+      // User not found
+      res.status(404).json({ message: 'User not found.' });
+    }
+
+  } catch (error) {
+    console.error('Error fetching user creation date:', error);
+    res.status(500).json({ message: 'Failed to fetch user creation date.', error: error.message });
+  }
+});
+// --- End of API route to get the account creation date ---
+
 // --- Password Reset Flow (More complex - requires email service) ---
 // POST /api/auth/forgot-password - Initiates reset (sends email with token)
 
