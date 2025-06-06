@@ -1262,6 +1262,149 @@ app.delete('/api/habits/:habitId', async (req, res) => {
 });
 // --- End of API route to delete a single habit ---
 
+// --- API route for a user to join a group ---
+app.post('/api/groups/:groupId/join', async (req, res) => {
+  // Get the database connection
+  const db = req.app.locals.db;
+
+  // Check if the database connection is available
+  if (!db) {
+    res.status(500).json({ message: 'Database not connected.' });
+    return;
+  }
+
+  // Get the group ID from the URL parameters and user ID from the request body
+  const groupId = req.params.groupId;
+  const userId = req.body.userId; // Expecting userId in the request body
+
+  // Basic validation
+  if (!groupId || !userId) {
+    res.status(400).json({ message: 'Missing group ID in parameters or user ID in body.' });
+    return;
+  }
+
+  try {
+    // Validate and convert IDs to ObjectId
+    if (!ObjectId.isValid(groupId)) {
+        res.status(400).json({ message: 'Invalid group ID format.' });
+        return;
+    }
+     if (!ObjectId.isValid(userId)) {
+        res.status(400).json({ message: 'Invalid user ID format.' });
+        return;
+    }
+    const groupObjectId = new ObjectId(groupId);
+    const userObjectId = new ObjectId(userId);
+
+    // Get the groups collection
+    const groupsCollection = db.collection('groups'); // *** Assuming collection name ***
+
+    // Find the group and check if the user is already a member
+    const group = await groupsCollection.findOne({ _id: groupObjectId });
+
+    if (!group) {
+      res.status(404).json({ message: 'Group not found.' });
+      return;
+    }
+
+    // Check if user is already a member
+    if (group.memberIds && group.memberIds.includes(userObjectId)) {
+       res.status(409).json({ message: 'User is already a member of this group.' });
+       return;
+    }
+
+    // Add the user ID to the memberIds array
+    const result = await groupsCollection.updateOne(
+      { _id: groupObjectId },
+      { $push: { memberIds: userObjectId } }
+    );
+
+    if (result.modifiedCount === 1) {
+      res.status(200).json({ message: 'User successfully joined the group.' });
+    } else {
+      // Should not happen if group is found and user wasn't a member, but as a fallback
+       res.status(500).json({ message: 'Failed to add user to group member list.' });
+    }
+
+  } catch (error) {
+    console.error('Error joining group:', error);
+    res.status(500).json({ message: 'Failed to join group.', error: error.message });
+  }
+});
+// --- End of API route for joining a group ---
+
+// --- API route for a user to leave a group ---
+app.post('/api/groups/:groupId/leave', async (req, res) => {
+  // Get the database connection
+  const db = req.app.locals.db;
+
+  // Check if the database connection is available
+  if (!db) {
+    res.status(500).json({ message: 'Database not connected.' });
+    return;
+  }
+
+  // Get the group ID from the URL parameters and user ID from the request body
+  const groupId = req.params.groupId;
+  const userId = req.body.userId; // Expecting userId in the request body
+
+  // Basic validation
+  if (!groupId || !userId) {
+    res.status(400).json({ message: 'Missing group ID in parameters or user ID in body.' });
+    return;
+  }
+
+  try {
+    // Validate and convert IDs to ObjectId
+    if (!ObjectId.isValid(groupId)) {
+        res.status(400).json({ message: 'Invalid group ID format.' });
+        return;
+    }
+     if (!ObjectId.isValid(userId)) {
+        res.status(400).json({ message: 'Invalid user ID format.' });
+        return;
+    }
+    const groupObjectId = new ObjectId(groupId);
+    const userObjectId = new ObjectId(userId);
+
+    // Get the groups collection
+    const groupsCollection = db.collection('groups'); // *** Assuming collection name ***
+
+    // Find the group and check if the user is a member
+    const group = await groupsCollection.findOne({ _id: groupObjectId });
+
+    if (!group) {
+      res.status(404).json({ message: 'Group not found.' });
+      return;
+    }
+
+    // Check if user is NOT a member (cannot leave if not a member)
+    // Use toString() for comparison with ObjectIds in the array
+    if (!group.memberIds || !group.memberIds.map(id => id.toString()).includes(userId)) {
+       res.status(409).json({ message: 'User is not a member of this group.' });
+       return;
+    }
+
+    // Remove the user ID from the memberIds array
+    const result = await groupsCollection.updateOne(
+      { _id: groupObjectId },
+      { $pull: { memberIds: userObjectId } }
+    );
+
+    if (result.modifiedCount === 1) {
+      res.status(200).json({ message: 'User successfully left the group.' });
+    } else {
+      // Should not happen if user was a member, but as a fallback
+       res.status(500).json({ message: 'Failed to remove user from group member list.' });
+    }
+
+  } catch (error) {
+    console.error('Error leaving group:', error);
+    res.status(500).json({ message: 'Failed to leave group.', error: error.message });
+  }
+});
+// --- End of API route for leaving a group ---
+
 // --- Password Reset Flow (More complex - requires email service) ---
 // POST /api/auth/forgot-password - Initiates reset (sends email with token)
 
