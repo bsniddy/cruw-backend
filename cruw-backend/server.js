@@ -1014,6 +1014,107 @@ app.get('/api/users/:userId/createdAt', async (req, res) => {
 });
 // --- End of API route to get the account creation date ---
 
+// --- API route to get a single user by ID ---
+app.get('/api/users/:userId', async (req, res) => {
+  // Get the database connection
+  const db = req.app.locals.db;
+
+  // Check if the database connection is available
+  if (!db) {
+    res.status(500).json({ message: 'Database not connected.' });
+    return;
+  }
+
+  // Get the user ID from the URL parameters
+  const userId = req.params.userId;
+
+  // Basic validation
+  if (!userId) {
+    res.status(400).json({ message: 'Missing user ID in parameters.' });
+    return;
+  }
+
+  try {
+    // Validate and convert user ID to ObjectId
+    if (!ObjectId.isValid(userId)) {
+        res.status(400).json({ message: 'Invalid user ID format.' });
+        return;
+    }
+    const userObjectId = new ObjectId(userId);
+
+    // Get the users collection
+    const usersCollection = db.collection('users'); // *** Assuming collection name ***
+
+    // Find the user, excluding the password field for security
+    const user = await usersCollection.findOne(
+        { _id: userObjectId },
+        { projection: { password: 0 } } // Exclude password field
+    );
+
+    if (user) {
+      // Return the user details
+      res.status(200).json(user);
+    } else {
+      // User not found
+      res.status(404).json({ message: 'User not found.' });
+    }
+
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Failed to fetch user.', error: error.message });
+  }
+});
+// --- End of API route to get a single user ---
+
+// --- API route to get a single group by ID ---
+app.get('/api/groups/:groupId', async (req, res) => {
+  // Get the database connection
+  const db = req.app.locals.db;
+
+  // Check if the database connection is available
+  if (!db) {
+    res.status(500).json({ message: 'Database not connected.' });
+    return;
+  }
+
+  // Get the group ID from the URL parameters
+  const groupId = req.params.groupId;
+
+  // Basic validation
+  if (!groupId) {
+    res.status(400).json({ message: 'Missing group ID in parameters.' });
+    return;
+  }
+
+  try {
+    // Validate and convert group ID to ObjectId
+    if (!ObjectId.isValid(groupId)) {
+        res.status(400).json({ message: 'Invalid group ID format.' });
+        return;
+    }
+    const groupObjectId = new ObjectId(groupId);
+
+    // Get the groups collection
+    const groupsCollection = db.collection('groups'); // *** Assuming collection name ***
+
+    // Find the group
+    const group = await groupsCollection.findOne({ _id: groupObjectId });
+
+    if (group) {
+      // Return the group details
+      res.status(200).json(group);
+    } else {
+      // Group not found
+      res.status(404).json({ message: 'Group not found.' });
+    }
+
+  } catch (error) {
+    console.error('Error fetching group:', error);
+    res.status(500).json({ message: 'Failed to fetch group.', error: error.message });
+  }
+});
+// --- End of API route to get a single group ---
+
 // --- Password Reset Flow (More complex - requires email service) ---
 // POST /api/auth/forgot-password - Initiates reset (sends email with token)
 
